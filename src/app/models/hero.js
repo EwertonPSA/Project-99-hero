@@ -39,6 +39,6 @@ const HeroSchema = new mongoose.Schema({
 });
 
 //"compilando" o modelo
- const User = mongoose.model('User'/*Nome do model*/, UserSchema/*Passa o nome do esquema*/);
+ const Hero = mongoose.model('Hero'/*Nome do model*/, HeroSchema/*Passa o nome do esquema*/);
  /*Exporta o usuario*/
- module.exports = User;
+ module.exports = Hero;
