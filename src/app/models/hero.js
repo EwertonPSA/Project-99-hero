@@ -1,5 +1,5 @@
-const mongoose = require('../../db');
-const bcrypt = require('bcryptjs');
+const mongoose = require('../../database');
+//const bcrypt = require('bcryptjs');//VER SE VA PRECISAR DE SENHA
 /**
  * Esquema do heroi no banco de dados
  * {
@@ -15,6 +15,7 @@ const HeroSchema = new mongoose.Schema({
 		type: String,
         required: true,
         select: false, //Impedir que o nome seja listado
+        lowercase: true,
     },
     codename:{
         type: String,
@@ -29,12 +30,14 @@ const HeroSchema = new mongoose.Schema({
     city:[{//--------------------APRESENTAR ,Incluido como atributo, diminuindo tempo de acesso ao banco
         type: String,
         required: true,
-        enum: ['new york', 'rio de janeiro', 'toquio'], 
+        lowercase: true, 
+        enum: ['new york', 'rio de janeiro', 'toquio'],
     }],
     teamWork: {
         type: String,
         enum: ['sim', 'não', 'indiferente'],
-        default: 'indiferente'
+        default: 'indiferente',
+        lowercase: true,
     }
 });
 
