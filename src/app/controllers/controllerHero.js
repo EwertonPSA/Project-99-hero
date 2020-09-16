@@ -4,8 +4,7 @@ const express = require ('express');
 const router = express.Router();
 const Hero = require('../models/hero');//Nome do arquivo
 const Disaster = require('../models/disaster');
-const { promises } = require('fs');
-const { send } = require('process');
+const mongoose = require('../../database');
 
 //Listagem
 router.get('/', async(req, res)=>{
@@ -28,46 +27,73 @@ router.get('/', async(req, res)=>{
     }
 });
 
+/**
+ * Defini o tipo de erro e atrelha a ele uma mensagem
+ * @param {String} message - Mensagem do erro que deseja ser emitida pro erro 
+ */
+function UserException(message, attribute) {
+    this.message = message;
+    this.name = "UserException";
+ }
+
 //Criar heroi
 router.post('/', async(req,res)=>{
     try{
-        const {realName, codename, disasters, city} = req.body;
-        const hero = new Hero({realName, codename, city});
+        const {realName, codename, cities, disasters} = req.body;
+        const hero = new Hero({realName, codename, cities});
+        const valueNecessary = ['realName', 'codename', 'cities', 'disaster'];
 
+        /**Se a key teamwork foi repassado entao
+           Eh mudado o seu valor default*/
+        if(req.body.hasOwnProperty('teamWork')){
+            hero.set('teamWork', req.body.teamWork.toLowerCase());
+        }
+
+        if(!req.body.hasOwnProperty('disasters')){
+            throw new UserException('Error, it is necessary to include disasters');
+        }
+       
         /**
-         * Inclui os desastres no esquema do heroi
+         * Incluindo os desastres no esquema do heroi
+         * Eh passado por cada desastre e se um desastre nao
+         * for encontrado no database entao o heroi nao eh cadastrado,
+         * Disaster.name esta em lowercase entao eh feito 
+         * O tratamento da entrada antes de busca-lo no banco
          */
-        await Promise.all(
-            disasters.map( async disaster => {
-                const disasterInDatabase = await Disaster.findOne({...disaster});
-                console.log(disasterInDatabase);
-                if(!disasterInDatabase){
-                    throw new Error('Disaster not found in database!');
-                    //return res.status(400).send({error: 'Error disaster not found'});
-                }
-                hero.disasters.push(disasterInDatabase);//Inlcui o desastre pro heroi
-            })
-        ).then(res =>{
-            console.log('Nao era pra ta aq2');
+        await Promise.all(disasters.map( async disaster => {
+            var disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
+            //Cadastra dados com o ID pois eh referenciado
+            hero.disasters.push(disasterInDatabase);
+        })).then(async function(){
+            /*Caso todos dessastres estejam na base de dados
+              entao ele eh incluido no heoi*/
+            await hero.save();
+            hero.realName = undefined;//Nao exibir o nome usado pro cadastro
+            return res.send({hero});
         }).catch(err => {
-            //Como eu eu pego um throw que foi levantado?
-            console.log(err);
-            return res.status(400).send({err});
+            //Emite erro que deve ser tratado no try catch por fora
+            //Que inclui todas validacoes de atributos no banco
+            throw err;
         });
-        
-        //await hero.save();
-        //return res.send(hero);
-
-        
-        //Atualizando o project com as tasks
-        
-
-        
-    }catch(err){
-        console.log('Ta no catch')
-        return res.status(400).send({error: 'Error create new hero'});
+    }catch(err){//Problema nas keys do json
+        if(err.name === "ValidationError"){
+            var error = {};
+            const keys = Object.keys(err.errors);
+            console.log(keys);
+            keys.forEach((key) => {
+                error[key] = err.errors[key].message;
+            });
+            return res.status(400).send({error: error}); // or return next(error);
+        }else if(err.name=="UserException"){
+            return res.status(400).send({error: err.message});
+        }else{
+            console.log('No catch de fora', err.name, err);
+            return res.status(400).send({error: 'Error create new hero'});
+        }
     }
 });
+
+
 /*
 //Atualizar um projeto
 router.put('/:projectId', authMiddleware, async(req, res)=>{

@@ -41,7 +41,7 @@ router.post("/register", async(req, res) => {
             token:generateToken({id: disaster.id}),
         });
     }catch (err){//Caso ocorra erro na criacao do usuario
-        return res.status(400).send({error: 'Registration failed'});
+        return res.status(400).send({error: 'Error create new disaster'});
     }
 });
 
