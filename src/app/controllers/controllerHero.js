@@ -9,48 +9,50 @@ const mongoose = require('../../database');
 //Listagem
 router.get('/', async(req, res)=>{
     try{
-        const hero = await Hero.find().populate(['disaster']);//Buscando os usuarios relacionados
-        //Assim nao precisa fazer mais de uma query (buscar os projetos e depois query buscando os usuarios)
+        const hero = await Hero.find().populate(['disaster']);
         return res.send( {hero} );
     }catch(err){
         return res.status(400).send({error: 'Error load heros'});
     }
 });
 
-//Listar de um heroi pelo id
-router.get('/', async(req, res)=>{
+//Listar um heroi pelo id
+router.get('/:heroId', async(req, res)=>{
     try{
-        const hero = await Project.findById(req.params.projectId).populate('disaster');
+        const hero = await Hero.findById(req.params.heroId).populate('disaster');
         return res.send( {hero} );
     }catch(err){
-        return res.status(400).send({error: 'Error load user by Id'});
+        return res.status(400).send({error: 'Error, hero not found'});
     }
 });
 
 /**
- * Defini o tipo de erro e atrelha a ele uma mensagem
+ * Defini o um tipo de erro e atrelha a ele uma mensagem
  * @param {String} message - Mensagem do erro que deseja ser emitida pro erro 
+ * @param {String} key - Chave associada a mensagem de erro
  */
-function UserException(message, attribute) {
+function HeroException(message, key) {
     this.message = message;
-    this.name = "UserException";
+    this.key = key;
+    this.name = "HeroException";
  }
 
-//Criar heroi
+//Rota para criar um heroi
 router.post('/', async(req,res)=>{
     try{
         const {realName, codename, cities, disasters} = req.body;
         const hero = new Hero({realName, codename, cities});
         const valueNecessary = ['realName', 'codename', 'cities', 'disaster'];
 
-        /**Se a key teamwork foi repassado entao
-           Eh mudado o seu valor default*/
+        /*Se a key teamwork foi repassado entao muda o valor default*/
         if(req.body.hasOwnProperty('teamWork')){
             hero.set('teamWork', req.body.teamWork.toLowerCase());
         }
 
+        /**Verifica se o disaster foi informado na requisicao
+         * Pois no map a frente ele eh usado*/
         if(!req.body.hasOwnProperty('disasters')){
-            throw new UserException('Error, it is necessary to include disasters');
+            throw new HeroException('Error, it is necessary to include disaster', 'disasters');
         }
        
         /**
@@ -66,37 +68,48 @@ router.post('/', async(req,res)=>{
             hero.disasters.push(disasterInDatabase);
         })).then(async function(){
             /*Caso todos dessastres estejam na base de dados
-              entao ele eh incluido no heoi*/
+              entao ele eh incluido no heroi*/
             await hero.save();
-            hero.realName = undefined;//Nao exibir o nome usado pro cadastro
+            hero.realName = undefined;//Nao exibir o nome usado apos o cadastro
             return res.send({hero});
         }).catch(err => {
             //Emite erro que deve ser tratado no try catch por fora
             //Que inclui todas validacoes de atributos no banco
             throw err;
         });
-    }catch(err){//Problema nas keys do json
+    }catch(err){//Problema keys json
         if(err.name === "ValidationError"){
+            /**
+             * Percorre todos os erros de validacoes
+             * Guardando as keys e os seus valores 
+             * Para reportar os erros na resposta
+             */
             var error = {};
             const keys = Object.keys(err.errors);
-            console.log(keys);
             keys.forEach((key) => {
                 error[key] = err.errors[key].message;
             });
             return res.status(400).send({error: error}); // or return next(error);
-        }else if(err.name=="UserException"){
-            return res.status(400).send({error: err.message});
-        }else{
-            console.log('No catch de fora', err.name, err);
-            return res.status(400).send({error: 'Error create new hero'});
+        }else if(err.name=="HeroException"){
+            var error = {};
+            error[err.key] = err.message;
+            return res.status(400).send({error: error});
+        }else if(err.name==="MongoError" && err.code===11000){
+            /**Erro diferente do mongoose que reporta
+               Chave unica repetida*/
+            const value = err.keyValue.codename;
+            return res.status(400).send({error: `Error, codename \'${value}\' already exist`});
+        }
+        else{
+            return res.status(400).send({error: 'Error, create new hero'});
         }
     }
 });
 
 
-/*
+
 //Atualizar um projeto
-router.put('/:projectId', authMiddleware, async(req, res)=>{
+router.put('/:projectId',  async(req, res)=>{
     try{
         const {title, description, tasks_arr} = req.body;
         const project = await Project.findByIdAndUpdate(req.params.projectId, {//projectId eh informado no link
@@ -124,7 +137,7 @@ router.put('/:projectId', authMiddleware, async(req, res)=>{
 });
 
 //Deletar um projeto
-router.delete('/:projectId', authMiddleware, async(req, res)=>{
+router.delete('/:projectId', async(req, res)=>{
     try{
         await Project.findByIdAndRemove(req.params.projectId);
         return res.send();
@@ -132,5 +145,4 @@ router.delete('/:projectId', authMiddleware, async(req, res)=>{
         return res.status(400).send({error: 'Error deleting project'});
     }
 });
-*/
 module.exports = app => app.use('/hero', router);
