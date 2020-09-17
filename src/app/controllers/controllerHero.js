@@ -6,36 +6,79 @@ const Hero = require('../models/hero');//Nome do arquivo
 const Disaster = require('../models/disaster');
 const mongoose = require('../../database');
 
-//Listagem
-router.get('/', async(req, res)=>{
-    try{
-        const hero = await Hero.find().populate(['disaster']);
-        return res.send( {hero} );
-    }catch(err){
-        return res.status(400).send({error: 'Error load heros'});
-    }
-});
-
-//Listar um heroi pelo id
-router.get('/:heroId', async(req, res)=>{
-    try{
-        const hero = await Hero.findById(req.params.heroId).populate('disaster');
-        return res.send( {hero} );
-    }catch(err){
-        return res.status(400).send({error: 'Error, hero not found'});
-    }
-});
-
 /**
- * Defini o um tipo de erro e atrelha a ele uma mensagem
+ * Defini novos erros associados ma formatacao de entrada repassada para controllerHero
  * @param {String} message - Mensagem do erro que deseja ser emitida pro erro 
- * @param {String} key - Chave associada a mensagem de erro
+ * @param {String} key - Chave associada ao erro da mensagem
  */
 function HeroException(message, key) {
     this.message = message;
     this.key = key;
     this.name = "HeroException";
  }
+
+//Listagem
+router.get('/', async(req, res)=>{
+    try{
+        const hero = await Hero.find().populate('disasters');
+        return res.send( {hero} );
+    }catch(err){
+        return res.status(400).send({error: 'Error load heros'});
+    }
+});
+
+
+
+//Listar um heroi pelo id
+router.get('/recuperate', async(req, res)=>{
+    try{
+        
+        if(!req.body.hasOwnProperty('disasters')){
+            
+        }
+        const queryObj = {};
+        const keys = Object.keys(req.body);
+        const keysAcceptable = ['codename', 'disasters', 'cities'];
+
+        await Promise.all(keys.map( async key => {
+            if(keysAcceptable.indexOf(key)===-1){//Verificando atributo nao necessario
+                throw new HeroException(`Error, \'${key}\':\'${queryObj[key]}\' not allowed` , `${key}`);
+            }else if(key === "disasters"){
+                /*Para fazer a busca de herois baseado em disastres
+                  Eh necessario buscar os desastres em Disaster. Eh usado
+                  $or para puxar todos os _ids dos desastres e depois
+                  relacionamento com o heroi*/
+                const array_disaster = req.body[key];
+                const disaster = await Disaster.find({"$or":array_disaster});
+                queryObj[key] = disaster;
+            }else{
+                queryObj[key] = req.body[key];
+            }
+        }));
+        console.log(queryObj);
+
+        //Folta soh dizer que o desastre deve ser encontrado em pelo menos um
+        //Pq da forma que ele ta, UM ARRAY, ele interpreta que eh um and
+        //E ai soh pega os valores com aquela combinacao expecifica
+        //Entao se puxar heroi de desastre de roubo, soh vem de roubo, 
+        //Nao vem os de roubo com assalto por ex
+        const heros = await Hero.find(queryObj).populate('disasters');
+        //const heros = await Hero.find({codename, cities, disasters}).populate('disasters');
+
+        return res.send( {heros} );
+    }catch(err){
+        if(err.name==="HeroException"){
+            const error = {};
+            error[err.key] = err.message;
+            return res.status(400).send({error: error});
+        }else{
+            console.log(err);
+            return res.status(400).send({error: 'Error, heros not found'});
+        }
+    }
+});
+
+
 
 //Rota para criar um heroi
 router.post('/', async(req,res)=>{
@@ -63,7 +106,7 @@ router.post('/', async(req,res)=>{
          * O tratamento da entrada antes de busca-lo no banco
          */
         await Promise.all(disasters.map( async disaster => {
-            var disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
+            const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
             //Cadastra dados com o ID pois eh referenciado
             hero.disasters.push(disasterInDatabase);
         })).then(async function(){
@@ -84,35 +127,33 @@ router.post('/', async(req,res)=>{
              * Guardando as keys e os seus valores 
              * Para reportar os erros na resposta
              */
-            var error = {};
+            const error = {};
             const keys = Object.keys(err.errors);
             keys.forEach((key) => {
                 error[key] = err.errors[key].message;
             });
-            return res.status(400).send({error: error}); // or return next(error);
+            return res.status(400).send({error: error});
         }else if(err.name=="HeroException"){
-            var error = {};
+            const error = {};
             error[err.key] = err.message;
             return res.status(400).send({error: error});
         }else if(err.name==="MongoError" && err.code===11000){
             /**Erro diferente do mongoose que reporta
                Chave unica repetida*/
             const value = err.keyValue.codename;
-            return res.status(400).send({error: `Error, codename \'${value}\' already exist`});
+            return res.status(400).send({error: {'codename':`Error, \'${value}\' already exist`}});
         }
         else{
-            return res.status(400).send({error: 'Error, create new hero'});
+            return res.status(500).send({error: 'Error, create new hero'});
         }
     }
 });
 
-
-
-//Atualizar um projeto
-router.put('/:projectId',  async(req, res)=>{
+//Atualizar dados heroi
+router.put('/:heroId',  async(req, res)=>{
     try{
-        const {title, description, tasks_arr} = req.body;
-        const project = await Project.findByIdAndUpdate(req.params.projectId, {//projectId eh informado no link
+        const {codename, description, tasks_arr} = req.body;
+        const project = await Project.findByIdAndUpdate(req.params.heroId, {//projectId eh informado no link
             title, 
             description
         },{ new: true }); //Por padrao findByIdAndUpdate retorna o valo antigo, alterei pra retornar o novo
