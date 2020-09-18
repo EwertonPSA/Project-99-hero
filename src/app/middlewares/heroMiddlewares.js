@@ -1,20 +1,20 @@
 const { body, validationResult } = require('express-validator');
 
 /**
- * Funcao que verifica se foi emitido algum erro
- * Nas entradas, enviando uma resposta de erro
- * com mais detalhes caso seja encontrado um erro
+ * Funcao que verifica se foi encontrado algum erro
+ * Nas entradas, enviando uma resposta com detalhes do 
+ * Primeiro erro encontrado
  */
 validationParams = function(req, res, next){
     const errorValidation = validationResult(req);
     if (! errorValidation.isEmpty() ) {
 
         return res.status(400).send({
-            //Emiti o primeiro erro encontrado
+            //Emiti apenas o primeiro erro encontrado
             error: errorValidation.errors[0]
         });
     }
-    next()
+    next();
 }
 
 /**
@@ -26,8 +26,7 @@ exports.recuperate =  [
     body('codename')
         .optional()
         .not()
-        .isEmpty()
-        .withMessage("Error, the field cannot be empty"),
+        .isEmpty().withMessage("Error, the field cannot be empty"),
     validationParams,
     body('disasters')
         .optional()
