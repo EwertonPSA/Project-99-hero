@@ -1,32 +1,27 @@
-//FALTA CRIAR MIDDLEWARE TBM
 const express = require ('express');
-//const authMiddleware = require('../middlewares/auth');
 const router = express.Router();
-const Hero = require('../models/hero');//Nome do arquivo
+const Hero = require('../models/hero');
 const Disaster = require('../models/disaster');
 const mongoose = require('../../database');
 const validation = require('../middlewares/heroMiddlewares');
 
-
-
-//Listagem
+/**
+ * Lista todos os herois
+ */
 router.get('/', async(req, res)=>{
     try{
         const hero = await Hero.find().populate('disasters');
         return res.send( {hero} );
     }catch(err){
-        return res.status(400).send({error: 'Error load heros'});
+        return res.status(500).send({error: 'Error load heros'});
     }
 });
 
-
-
-
 /**
  * Busca herois no banco de dados
- * @param  {String} [codename] Opcional - codenome do heroi
- * @param { [{"name":String}] } [disasters] Opcional - array de desastres coberto pelos heroi
- * @param { [ String ] } [cities] Opcional - array de cidades cobertas pelos heroi
+ * @param  {String} req.body.codename Opcional - codenome do heroi
+ * @param { [{"name":String}] } req.body.disasters Opcional - array de desastres coberto pelos heroi
+ * @param { [ String ] } req.body.cities Opcional - array de cidades cobertas pelos heroi
  */
 router.get('/recuperate', validation.recuperate, async(req, res)=>{
     try{
@@ -63,9 +58,8 @@ router.get('/recuperate', validation.recuperate, async(req, res)=>{
     }
 });
 
-
 /**
- * Definindo formatacao uma formatacao de erro
+ * Definindo uma formatacao de erro no controller hero a ser enviada como resposta
  * @param {String} msg mensagem a ser reportada pro erro
  * @param {String} param o parametro em que se encontra o erro
  * @param {String} location onde esta a variavel do erro
@@ -80,11 +74,11 @@ function errorHero(msg, param, location, error){
 
 /**
  * Cria um heroi
- * @param {String} [realName] nome verdadeiro do heroi
- * @param {String} [codename] codenome do heroi
- * @param { [{"name":String}] } [disasters] array de desastres coberto pelos heroi
- * @param { [ String ] } [cities] array de cidades cobertas pelos heroi
- * @param {String} [teamWork] Opcional - se o heroi trabalha em equipe
+ * @param {String} req.body.realName nome verdadeiro do heroi
+ * @param {String} req.body.codename codenome do heroi
+ * @param { [{"name":String}] } req.body.disasters array de desastres coberto pelos heroi
+ * @param { [ String ] } req.body.cities array de cidades cobertas pelos heroi
+ * @param {String} req.body.teamWork Opcional - se o heroi trabalha em equipe
  */
 router.post('/', validation.register, async(req,res)=>{
     try{
@@ -97,15 +91,18 @@ router.post('/', validation.register, async(req,res)=>{
         }
        
         /**Incluindo os desastres no esquema do heroi
-         * Eh passado por cada desastre e se um desastre nao
-         * for encontrado no database entao o heroi nao eh cadastrado*/
+         * Percorre os desastres e se um desastre nao
+         * for encontrado no database entao o heroi nao eh cadastrado
+         * E levanta um erro como resposta*/
+
+
         await Promise.all(disasters.map( async disaster => {
             const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
             if(disasterInDatabase===null){
-                /**O erro ValidationError gerado por hero.save()  
+                /**O erro ValidationError gerado por hero.save() do mongoose
                  * Ao tentar armazenar null em Disaster nao armazena 
-                 * Informacoes como nome quando eh feito Disaster.find()
-                 * Foi necessario gerar um novo erro pra guardar informacoes do erro*/
+                 * O nome do desastre buscado (Disaster.find())
+                 * Foi necessario gerar um novo erro pra detalhar o erro como resposta*/
                 const msg = `disaster \'${disaster.name}\' is not registered`;
                 const param = "disaster";
                 const location = "body";
@@ -113,8 +110,7 @@ router.post('/', validation.register, async(req,res)=>{
             }
             //Cadastra no array os dados com o ID pra referenciar
             hero.disasters.push(disasterInDatabase);
-        })).then(async function(){
-            /*Salva o heroi no banco*/
+        })).then(async function(){/*Salva o heroi no banco*/
             await hero.save();
             hero.realName = undefined;//Nao exibir nome apos cadastro
             return res.send({hero});
@@ -157,13 +153,13 @@ router.post('/', validation.register, async(req,res)=>{
 
 /**
  * Atualizar o cadastro do heroi
- * Se eh o alterado o parametro
+ * Eh o alterado apenas os parametro
  * Repassado na requisicao, sendo o codename obrigatorio
- * @param {String} [realName] Opcional - nome verdadeiro do heroi
- * @param {String} [codename] codenome do heroi
- * @param { [{"name":String}] } [disasters] Opcional - array de desastres coberto pelos heroi
- * @param { [ String ] } [cities] Opcional - array de cidades cobertas pelos heroi
- * @param {String} [teamWork] Opcional - se o heroi trabalha em equipe
+ * @param {String} req.body.realName Opcional - nome verdadeiro do heroi
+ * @param {String} req.body.codename codenome do heroi
+ * @param { [{"name":String}] } req.body.disasters Opcional - array de desastres, precisa ir "name" como chave do desastre
+ * @param { [ String ] } req.body.cities Opcional - array de cidades cobertas pelos heroi
+ * @param {String} req.body.teamWork Opcional - se o heroi trabalha em equipe
  */
 router.put('/update', validation.update, async(req, res)=>{
     try{
@@ -171,7 +167,7 @@ router.put('/update', validation.update, async(req, res)=>{
         const hero = await Hero.findOne({codename}).populate('disasters');
         if(hero === null){//Caso o heroi nao exista
             const valor = codename;
-            const msg = `codiname '${valor}' is not registered`;
+            const msg = `codiname '${valor}' was not found`;
             const param = "codename";
             const location = "body";
             throw new errorHero(msg, param, location, 'errorUpdate');
@@ -182,6 +178,7 @@ router.put('/update', validation.update, async(req, res)=>{
             heroInfoUpdate['realName'] = realName.toLowerCase;
         }
         if(req.body.hasOwnProperty('teamWork')){
+            //validando entrada teamWork em lowercase
             const permited = ['não', 'sim', 'indiferente'];
             if(permited.indexOf(teamWork.toLowerCase())===-1){
                 const msg = `teamWork '${teamWork}' is not allowed`;
@@ -189,7 +186,6 @@ router.put('/update', validation.update, async(req, res)=>{
                 const location = "body";
                 throw new errorHero(msg, param, location, 'errorUpdate');
             }
-
             heroInfoUpdate['teamWork'] = teamWork;
         }
         if(req.body.hasOwnProperty('cities')){
@@ -206,13 +202,11 @@ router.put('/update', validation.update, async(req, res)=>{
                 }
             });
             heroInfoUpdate['cities'] = cities;
-
         }
         
         var disasterInsert = [];
-        /*Verificar se desastres estao no banco
-          Guarda os dados de disaster(como id)
-          No array disasterInsert*/
+        /*Percorre os desastres e verifica se estao cadastrados no banco
+          Depois armazenando ele em disasterInsert com id*/
         if(req.body.hasOwnProperty('disasters')){
             await Promise.all(disasters.map( async disaster => {
                 const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
@@ -249,13 +243,13 @@ router.put('/update', validation.update, async(req, res)=>{
 
 /**
  * Deletar um heroi
- * @param {String} [codename] codenome do heroi
+ * @param {String} req.body.codename codenome do heroi
  */
 router.delete('/delete', validation.delete, async(req, res)=>{
     try{
         const {codename} = req.body;
         const result = await Hero.findOneAndDelete({codename});
-        if(result === null){
+        if(result === null){//Heroi nao encontrado
             const msg = `hero '${codename}' was not found`;
             const param = "codename";
             const location = "body";
@@ -272,7 +266,7 @@ router.delete('/delete', validation.delete, async(req, res)=>{
                 location:location
             }});
         }else{
-            return res.status(400).send({error: 'Error deleting project'});
+            return res.status(500).send({error: 'Error deleting project'});
         }
     }
 });

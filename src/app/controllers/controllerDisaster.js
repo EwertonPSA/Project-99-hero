@@ -1,35 +1,32 @@
 const express = require('express');
 const Disaster = require('../models/disaster'); 
 const router = express.Router();
-
+const validation = require('../middlewares/disasterMiddleware');
 
 /**
- * {
- *      "disaster":"Assalto a banco"
- * }
+ * Rota para registro dos desastres 
+ * @param {String} req.body.name nome do desastre a ser cadastrado
  */
-//Rota de cadastro utilizando requisicao do tipo POST
-router.post("/register", async(req, res) => {
+router.post("/register", validation.register, async(req, res) => {
     const {name} = req.body;
-    try{
-        //Verifica se o desastre ja existe
-        if(await Disaster.findOne({name})){
-            return res.status(400).send({error: 'Error, disaster already exists'});
-        }      
-
-        //Aguardar a criacao do novo desastre antes de continuar
+    try{    
         const disaster = await Disaster.create(req.body);  
         return res.send(disaster);      
-    }catch (err){//Caso ocorra erro na criacao do usuario
-        return res.status(400).send({error: 'Error, create new disaster'});
+    }catch (err){
+        if(err.name==="MongoError" && err.code===11000){
+            return res.status(400).send({error: 'Error, disaster already exists'});
+        }else{
+            return res.status(500).send({error: 'Error, create new disaster'});
+        }
     }
 });
 
-//Listagem
+/**
+ * Rota para listas os desastres registrados
+ */
 router.get('/', async(req, res)=>{
     try{
-        const disaster = await Disaster.find();//Buscando os usuarios relacionados
-        //Assim nao precisa fazer mais de uma query (buscar os projetos e depois query buscando os usuarios)
+        const disaster = await Disaster.find();
         return res.send( {disaster} );
     }catch(err){
         return res.status(400).send({error: 'Error load disaster'});
@@ -37,15 +34,17 @@ router.get('/', async(req, res)=>{
 });
 
 //Deletar um desastre
-router.delete('/delete', async(req, res)=>{
+router.delete('/delete', validation.delete, async(req, res)=>{
     const {name} = req.body;
     try{
+        
         const disaster = await Disaster.findOne({name});
         if(!disaster){
             return res.status(400).send({error: 'Disaster not exists'});
         }
         await Disaster.findByIdAndRemove(disaster._id);
-        return res.send();
+        const msg = `Disaster '${name}' has been deleted`;
+        return res.send({succes:msg});
     }catch(err){
 
         return res.status(400).send({error: 'Error deleting project'});
