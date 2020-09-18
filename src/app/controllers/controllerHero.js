@@ -5,17 +5,9 @@ const router = express.Router();
 const Hero = require('../models/hero');//Nome do arquivo
 const Disaster = require('../models/disaster');
 const mongoose = require('../../database');
+const validation = require('../middlewares/heroMiddlewares');
 
-/**
- * Defini novos erros associados ma formatacao de entrada repassada para controllerHero
- * @param {String} message - Mensagem do erro que deseja ser emitida pro erro 
- * @param {String} key - Chave associada ao erro da mensagem
- */
-function HeroException(message, key) {
-    this.message = message;
-    this.key = key;
-    this.name = "HeroException";
- }
+
 
 //Listagem
 router.get('/', async(req, res)=>{
@@ -29,121 +21,136 @@ router.get('/', async(req, res)=>{
 
 
 
-//Listar um heroi pelo id
-router.get('/recuperate', async(req, res)=>{
+
+/**
+ * Busca herois no banco de dados
+ * @param  {String} [codename] Opcional - codenome do heroi
+ * @param { [{"name":String}] } [disasters] Opcional - array de desastres coberto pelos heroi
+ * @param { [ String ] } [cities] Opcional - array de cidades cobertas pelos heroi
+ */
+router.get('/recuperate', validation.recuperate, async(req, res)=>{
     try{
-        
-        if(!req.body.hasOwnProperty('disasters')){
-            
-        }
         const queryObj = {};
         const keys = Object.keys(req.body);
-        const keysAcceptable = ['codename', 'disasters', 'cities'];
 
+        /**
+         * Como as entradas sao opcionais,
+         * Foi feito o tratamento delas aqui dentro
+         */
         await Promise.all(keys.map( async key => {
-            if(keysAcceptable.indexOf(key)===-1){//Verificando atributo nao necessario
-                throw new HeroException(`Error, \'${key}\':\'${queryObj[key]}\' not allowed` , `${key}`);
-            }else if(key === "disasters"){
-                /*Para fazer a busca de herois baseado em disastres
-                  Eh necessario buscar os desastres em Disaster. Eh usado
-                  $or para puxar todos os _ids dos desastres e depois
-                  relacionamento com o heroi*/
+            if(key === "disasters"){
                 const array_disaster = req.body[key];
+                /*Eh usado $or para puxar todos os _ids 
+                  dos desastres e depois relaciono com o heroi*/
                 const disaster = await Disaster.find({"$or":array_disaster});
-                queryObj[key] = disaster;
+
+                /*$all->Busca herois que contem pelo menos o conjunto de 
+                        Desastres listado em array disaster*/
+                queryObj[key] = {'$all':disaster};
+            }else if(key == "cities"){
+                const array_cities = req.body[key];
+                /*$all->Busca herois que contem pelo menos o 
+                        conjunto de cidades do array cities*/
+                queryObj[key] = {'$all':array_cities};
             }else{
                 queryObj[key] = req.body[key];
             }
         }));
-        console.log(queryObj);
-
-        //Folta soh dizer que o desastre deve ser encontrado em pelo menos um
-        //Pq da forma que ele ta, UM ARRAY, ele interpreta que eh um and
-        //E ai soh pega os valores com aquela combinacao expecifica
-        //Entao se puxar heroi de desastre de roubo, soh vem de roubo, 
-        //Nao vem os de roubo com assalto por ex
         const heros = await Hero.find(queryObj).populate('disasters');
-        //const heros = await Hero.find({codename, cities, disasters}).populate('disasters');
-
         return res.send( {heros} );
     }catch(err){
-        if(err.name==="HeroException"){
-            const error = {};
-            error[err.key] = err.message;
-            return res.status(400).send({error: error});
-        }else{
-            console.log(err);
-            return res.status(400).send({error: 'Error, heros not found'});
-        }
+        return res.status(500).send({error: 'Hero search error'});
     }
 });
 
 
+/**
+ * Definindo formatacao uma formatacao de erro
+ * @param {String} msg mensagem a ser reportada pro erro
+ * @param {String} param o parametro em que se encontra o erro
+ * @param {String} location onde esta a variavel do erro
+ * @param {String} error nome do erro
+ */
+function errorHero(msg, param, location, error){
+    this.msg = msg;
+    this.param = param;
+    this.location = location;
+    this.name = error;
+}
 
-//Rota para criar um heroi
-router.post('/', async(req,res)=>{
+/**
+ * Cria um heroi
+ * @param {String} [realName] nome verdadeiro do heroi
+ * @param {String} [codename] codenome do heroi
+ * @param { [{"name":String}] } [disasters] array de desastres coberto pelos heroi
+ * @param { [ String ] } [cities] array de cidades cobertas pelos heroi
+ * @param {String} [teamWork] Opcional - se o heroi trabalha em equipe
+ */
+router.post('/', validation.register, async(req,res)=>{
     try{
         const {realName, codename, cities, disasters} = req.body;
         const hero = new Hero({realName, codename, cities});
-        const valueNecessary = ['realName', 'codename', 'cities', 'disaster'];
 
-        /*Se a key teamwork foi repassado entao muda o valor default*/
+        /*muda o valor default*/
         if(req.body.hasOwnProperty('teamWork')){
             hero.set('teamWork', req.body.teamWork.toLowerCase());
         }
-
-        /**Verifica se o disaster foi informado na requisicao
-         * Pois no map a frente ele eh usado*/
-        if(!req.body.hasOwnProperty('disasters')){
-            throw new HeroException('Error, it is necessary to include disaster', 'disasters');
-        }
        
-        /**
-         * Incluindo os desastres no esquema do heroi
+        /**Incluindo os desastres no esquema do heroi
          * Eh passado por cada desastre e se um desastre nao
-         * for encontrado no database entao o heroi nao eh cadastrado,
-         * Disaster.name esta em lowercase entao eh feito 
-         * O tratamento da entrada antes de busca-lo no banco
-         */
+         * for encontrado no database entao o heroi nao eh cadastrado*/
         await Promise.all(disasters.map( async disaster => {
             const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
-            //Cadastra dados com o ID pois eh referenciado
+
+            if(disasterInDatabase===null){
+                /**O erro ValidationError gerado por hero.save()  
+                 * Ao tentar armazenar null em Disaster nao armazena 
+                 * Informacoes como nome quando eh feito Disaster.find()
+                 * Foi necessario gerar um novo erro*/
+                const msg = `disaster \'${disaster.name}\' not registered`;
+                const param = "disaster";
+                const location = "body";
+                throw new errorHero(msg, param, location, 'errorDisaster');
+            }
+            //Cadastra no array os dados com o ID pra referenciar
             hero.disasters.push(disasterInDatabase);
         })).then(async function(){
-            /*Caso todos dessastres estejam na base de dados
-              entao ele eh incluido no heroi*/
+            /*Salva o heroi no banco*/
             await hero.save();
-            hero.realName = undefined;//Nao exibir o nome usado apos o cadastro
+            hero.realName = undefined;//Nao exibir nome apos cadastro
             return res.send({hero});
         }).catch(err => {
-            //Emite erro que deve ser tratado no try catch por fora
-            //Que inclui todas validacoes de atributos no banco
-            throw err;
+            throw err;//Tratado pelo try catch de fora
         });
-    }catch(err){//Problema keys json
+    }catch(err){
         if(err.name === "ValidationError"){
-            /**
-             * Percorre todos os erros de validacoes
-             * Guardando as keys e os seus valores 
-             * Para reportar os erros na resposta
-             */
+            //Erro de validacoes do enum no modelo hero
             const error = {};
             const keys = Object.keys(err.errors);
-            keys.forEach((key) => {
-                error[key] = err.errors[key].message;
-            });
-            return res.status(400).send({error: error});
-        }else if(err.name=="HeroException"){
-            const error = {};
-            error[err.key] = err.message;
-            return res.status(400).send({error: error});
+            return res.status(400).send({error: {
+                //Reporta soh o primeiro erro encontrado
+                msg:err.errors[keys[0]].message,
+                param:keys[0],
+                location: 'body'
+            }});
         }else if(err.name==="MongoError" && err.code===11000){
             /**Erro diferente do mongoose que reporta
                Chave unica repetida*/
             const value = err.keyValue.codename;
-            return res.status(400).send({error: {'codename':`Error, \'${value}\' already exist`}});
-        }
-        else{
+            return res.status(400).send({error: {
+                msg:`codename \'${value}\' already exist`,
+                param: 'codename',
+                location: 'body'
+            }});
+        }else if(err.name==="errorDisaster"){
+            //Disastre nao cadastrado
+            const {msg, param, location} = err;
+            return res.status(400).send({error:{
+                msg:msg,
+                param:param,
+                location:location
+            }});
+        }else{
             return res.status(500).send({error: 'Error, create new hero'});
         }
     }
@@ -170,7 +177,6 @@ router.put('/:heroId',  async(req, res)=>{
         }));
         
         await project.save();
-
         return res.send(project);
     }catch(err){
         return res.status(400).send({error: 'Error create new project'});
