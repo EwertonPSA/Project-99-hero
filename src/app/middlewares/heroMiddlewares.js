@@ -105,3 +105,10 @@ exports.update = [
         .isEmpty().withMessage('Error, the field cannot be empty'),
     validationParams
 ]
+
+exports.delete = [
+    body('codename')
+    .not()
+    .isEmpty().withMessage('Error, the field cannot be empty'),   
+    validationParams,
+]

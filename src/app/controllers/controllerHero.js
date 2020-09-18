@@ -155,7 +155,16 @@ router.post('/', validation.register, async(req,res)=>{
     }
 });
 
-//Atualizar dados heroi
+/**
+ * Atualizar o cadastro do heroi
+ * Se eh o alterado o parametro
+ * Repassado na requisicao, sendo o codename obrigatorio
+ * @param {String} [realName] Opcional - nome verdadeiro do heroi
+ * @param {String} [codename] codenome do heroi
+ * @param { [{"name":String}] } [disasters] Opcional - array de desastres coberto pelos heroi
+ * @param { [ String ] } [cities] Opcional - array de cidades cobertas pelos heroi
+ * @param {String} [teamWork] Opcional - se o heroi trabalha em equipe
+ */
 router.put('/update', validation.update, async(req, res)=>{
     try{
         const {realName, cities, codename, disasters, teamWork} = req.body;
@@ -238,13 +247,33 @@ router.put('/update', validation.update, async(req, res)=>{
     }
 });
 
-//Deletar um projeto
-router.delete('/:projectId', async(req, res)=>{
+/**
+ * Deletar um heroi
+ * @param {String} [codename] codenome do heroi
+ */
+router.delete('/delete', validation.delete, async(req, res)=>{
     try{
-        await Project.findByIdAndRemove(req.params.projectId);
-        return res.send();
+        const {codename} = req.body;
+        const result = await Hero.findOneAndDelete({codename});
+        if(result === null){
+            const msg = `hero '${codename}' was not found`;
+            const param = "codename";
+            const location = "body";
+            throw new errorHero(msg, param, location, 'errorDelete');
+        }
+        const msg = `Hero '${codename}' has been deleted`;
+        return res.send({succes:msg});
     }catch(err){
-        return res.status(400).send({error: 'Error deleting project'});
+        if(err.name === "errorDelete"){
+            const {msg, param, location} = err;
+            return res.status(400).send({error:{
+                msg:msg,
+                param:param,
+                location:location
+            }});
+        }else{
+            return res.status(400).send({error: 'Error deleting project'});
+        }
     }
 });
 module.exports = app => app.use('/hero', router);
