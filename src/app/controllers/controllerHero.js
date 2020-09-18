@@ -160,21 +160,44 @@ router.put('/update', validation.update, async(req, res)=>{
     try{
         const {realName, cities, codename, disasters, teamWork} = req.body;
         const hero = await Hero.findOne({codename}).populate('disasters');
-        if(hero === null){
+        if(hero === null){//Caso o heroi nao exista
             const valor = codename;
-            const msg = `codiname ${valor} is not registered`;
+            const msg = `codiname '${valor}' is not registered`;
             const param = "codename";
             const location = "body";
-            throw new errorHero(msg, param, location, 'errorDisaster');
+            throw new errorHero(msg, param, location, 'errorUpdate');
         }
 
         const heroInfoUpdate = {};
         if(req.body.hasOwnProperty('realName')){
-            heroInfoUpdate['realName'] = realName;
-        }else if(req.body.hasOwnProperty('teamWork')){
+            heroInfoUpdate['realName'] = realName.toLowerCase;
+        }
+        if(req.body.hasOwnProperty('teamWork')){
+            const permited = ['não', 'sim', 'indiferente'];
+            if(permited.indexOf(teamWork.toLowerCase())===-1){
+                const msg = `teamWork '${teamWork}' is not allowed`;
+                const param = "teamWork";
+                const location = "body";
+                throw new errorHero(msg, param, location, 'errorUpdate');
+            }
+
             heroInfoUpdate['teamWork'] = teamWork;
-        }else if(req.body.hasOwnProperty('cities')){
+        }
+        if(req.body.hasOwnProperty('cities')){
+            //Feito o tratamando da entrada de cities
+            //Para pegar os dados em lowercase
+            const permited = ['new york', 'rio de janeiro', 'tókio'];
+            const value = cities;
+            value.forEach(item => {
+                if(permited.indexOf(item.toLowerCase())===-1){
+                    const msg = `disaster '${item}' is not registered`;
+                    const param = "cities";
+                    const location = "body";
+                    throw new errorHero(msg, param, location, 'errorUpdate');
+                }
+            });
             heroInfoUpdate['cities'] = cities;
+
         }
         
         var disasterInsert = [];
@@ -185,11 +208,10 @@ router.put('/update', validation.update, async(req, res)=>{
             await Promise.all(disasters.map( async disaster => {
                 const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
                 if(disasterInDatabase===null){//Caso nao exista, eh gerado um erro
-                    const valor = disaster;
-                    const msg = `disaster ${valor} is not registered`;
+                    const msg = `disaster '${disaster.name}' is not registered`;
                     const param = "disaster";
                     const location = "body";
-                    throw new errorHero(msg, param, location, 'errorDisaster');
+                    throw new errorHero(msg, param, location, 'errorUpdate');
                 }
                 disasterInsert.push(disasterInDatabase);
             })).then(async function(){
@@ -201,11 +223,18 @@ router.put('/update', validation.update, async(req, res)=>{
             heroInfoUpdate,
             { new: true })
         .populate('disasters');
-
         return res.send({hero:heroUpdateDatabase});
     }catch(err){
-        console.log(err);
-        return res.status(400).send({error:'Error create new project'});
+        if(err.name==="errorUpdate"){
+            const {msg, param, location} = err;
+            return res.status(400).send({error:{
+                msg:msg,
+                param:param,
+                location:location
+            }});
+        }else{
+            return res.status(500).send({error:'Error create new project'});
+        }
     }
 });
 

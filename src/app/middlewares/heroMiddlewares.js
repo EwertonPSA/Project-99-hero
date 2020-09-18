@@ -85,7 +85,7 @@ exports.update = [
     validationParams,
     body('codename')
         .not()
-        .isEmpty().withMessage('Error, '),   
+        .isEmpty().withMessage('Error, the field cannot be empty'),   
     validationParams,
     body('disasters')//array
         .optional()
