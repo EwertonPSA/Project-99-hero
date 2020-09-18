@@ -101,13 +101,12 @@ router.post('/', validation.register, async(req,res)=>{
          * for encontrado no database entao o heroi nao eh cadastrado*/
         await Promise.all(disasters.map( async disaster => {
             const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
-
             if(disasterInDatabase===null){
                 /**O erro ValidationError gerado por hero.save()  
                  * Ao tentar armazenar null em Disaster nao armazena 
                  * Informacoes como nome quando eh feito Disaster.find()
-                 * Foi necessario gerar um novo erro*/
-                const msg = `disaster \'${disaster.name}\' not registered`;
+                 * Foi necessario gerar um novo erro pra guardar informacoes do erro*/
+                const msg = `disaster \'${disaster.name}\' is not registered`;
                 const param = "disaster";
                 const location = "body";
                 throw new errorHero(msg, param, location, 'errorDisaster');
@@ -157,29 +156,56 @@ router.post('/', validation.register, async(req,res)=>{
 });
 
 //Atualizar dados heroi
-router.put('/:heroId',  async(req, res)=>{
+router.put('/update', validation.update, async(req, res)=>{
     try{
-        const {codename, description, tasks_arr} = req.body;
-        const project = await Project.findByIdAndUpdate(req.params.heroId, {//projectId eh informado no link
-            title, 
-            description
-        },{ new: true }); //Por padrao findByIdAndUpdate retorna o valo antigo, alterei pra retornar o novo
-        
-        project.tasks = [];//Retira do project os arrays atuais
-        
-        Task.remove({ project: project._id });//Remove os taks associados ao projeto a partir do id(contido em project)
+        const {realName, cities, codename, disasters, teamWork} = req.body;
+        const hero = await Hero.findOne({codename}).populate('disasters');
+        if(hero === null){
+            const valor = codename;
+            const msg = `codiname ${valor} is not registered`;
+            const param = "codename";
+            const location = "body";
+            throw new errorHero(msg, param, location, 'errorDisaster');
+        }
 
-        await Promise.all(tasks_arr.map( async task => {
-            const projectTask = new Task({ ...task, project: project._id});//Nao salva no banco, soh cria
-
-            await projectTask.save();//Salva no banco primeiro uma task
-            project.tasks.push(projectTask);//Inlcui essa tasks no array de project
-        }));
+        const heroInfoUpdate = {};
+        if(req.body.hasOwnProperty('realName')){
+            heroInfoUpdate['realName'] = realName;
+        }else if(req.body.hasOwnProperty('teamWork')){
+            heroInfoUpdate['teamWork'] = teamWork;
+        }else if(req.body.hasOwnProperty('cities')){
+            heroInfoUpdate['cities'] = cities;
+        }
         
-        await project.save();
-        return res.send(project);
+        var disasterInsert = [];
+        /*Verificar se desastres estao no banco
+          Guarda os dados de disaster(como id)
+          No array disasterInsert*/
+        if(req.body.hasOwnProperty('disasters')){
+            await Promise.all(disasters.map( async disaster => {
+                const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
+                if(disasterInDatabase===null){//Caso nao exista, eh gerado um erro
+                    const valor = disaster;
+                    const msg = `disaster ${valor} is not registered`;
+                    const param = "disaster";
+                    const location = "body";
+                    throw new errorHero(msg, param, location, 'errorDisaster');
+                }
+                disasterInsert.push(disasterInDatabase);
+            })).then(async function(){
+                heroInfoUpdate['disasters'] = disasterInsert;
+            });
+        }
+        const heroUpdateDatabase = await Hero.findByIdAndUpdate(
+            hero._id, 
+            heroInfoUpdate,
+            { new: true })
+        .populate('disasters');
+
+        return res.send({hero:heroUpdateDatabase});
     }catch(err){
-        return res.status(400).send({error: 'Error create new project'});
+        console.log(err);
+        return res.status(400).send({error:'Error create new project'});
     }
 });
 
