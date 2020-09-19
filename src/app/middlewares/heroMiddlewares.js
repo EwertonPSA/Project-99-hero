@@ -27,7 +27,7 @@ validationDisastersKey = function(req, res, next){
         const error = [];
         keys.forEach(key => {
             if(key != 'name'){
-                const msg = `Disaster format is not accepted. Format correct {'name':'value_disaster'}`;
+                const msg = `Disaster format in array is not accepted. Format correct {'name':'value_disaster'}`;
                 const param = `disasters`;
                 const location = "body";
                 error.push({msg:msg, param:param, location:location});
