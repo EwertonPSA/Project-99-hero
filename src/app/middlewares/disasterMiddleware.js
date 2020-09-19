@@ -1,14 +1,13 @@
 const { body, validationResult } = require('express-validator');
 
 /**
- * Funcao que verifica se foi encontrado algum erro
- * Nas entradas, enviando uma resposta com detalhes do 
- * Primeiro erro encontrado
+ * Funcao que verifica se existe algum erro
+ * Nas entradas enviando uma resposta com detalhes do 
+ * Primeiro erro encontrado, caso contrario prossegue
  */
 validationParams = function(req, res, next){
     const errorValidation = validationResult(req);
     if (! errorValidation.isEmpty() ) {
-
         return res.status(400).send({
             //Emiti apenas o primeiro erro encontrado
             error: errorValidation.errors[0]

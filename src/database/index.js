@@ -6,7 +6,7 @@ const mongoose = require('mongoose');
 const dotenv = require('dotenv');
 dotenv.config();
 
-const uri = process.env.MONGODB_URI; //uri com as configuracoes do banco
+const uri = process.env.MONGODB_URI; //configuracoes de acesso ao banco
 mongoose.connect(uri, { 
     useNewUrlParser: true, 
     useUnifiedTopology: true , 

@@ -7,10 +7,6 @@
 const fs = require ('fs');
 const path = require ('path');
 
-/**
- * 
- * @param {function} app - Aplicacao
- */
 module.exports = app =>{
     fs
         .readdirSync(__dirname)

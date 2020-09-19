@@ -11,7 +11,11 @@ const validation = require('../middlewares/heroMiddlewares');
 router.get('/', async(req, res)=>{
     try{
         const hero = await Hero.find().populate('disasters');
-        return res.send( {hero} );
+        if(hero.length===0){
+            return res.send( {hero:"hero not found"} );
+        }else{
+            return res.send( {hero} );
+        }
     }catch(err){
         return res.status(500).send({error: 'Error load heros'});
     }
@@ -26,33 +30,32 @@ router.get('/', async(req, res)=>{
 router.get('/recuperate', validation.recuperate, async(req, res)=>{
     try{
         const queryObj = {};
-        const keys = Object.keys(req.body);
 
-        /**
-         * Como as entradas sao opcionais,
-         * Foi feito o tratamento delas aqui dentro
-         */
-        await Promise.all(keys.map( async key => {
-            if(key === "disasters"){
-                const array_disaster = req.body[key];
-                /*Eh usado $or para puxar todos os _ids 
-                  dos desastres e depois relaciono com o heroi*/
-                const disaster = await Disaster.find({"$or":array_disaster});
+        if(req.body.hasOwnProperty('cities')){
+            /*$all->Busca herois que contem pelo menos o 
+                    conjunto de cidades do array cities*/
+            queryObj['cities'] = {'$all':req.body.cities};
+        }
+        if(req.body.hasOwnProperty('codename')){
+            queryObj['codename'] = req.body.codename;
+        }
 
-                /*$all->Busca herois que contem pelo menos o conjunto de 
-                        Desastres listado em array disaster*/
-                queryObj[key] = {'$all':disaster};
-            }else if(key == "cities"){
-                const array_cities = req.body[key];
-                /*$all->Busca herois que contem pelo menos o 
-                        conjunto de cidades do array cities*/
-                queryObj[key] = {'$all':array_cities};
-            }else{
-                queryObj[key] = req.body[key];
-            }
-        }));
+        if(req.body.hasOwnProperty('disasters')){
+            /*Eh usado $or para puxar todos os _ids 
+              de disasters e depois relaciono com o heroi*/
+            const disasters = await Disaster.find({"$or":req.body.disasters});
+
+            /*$all->Busca herois que contem pelo menos o conjunto de 
+                    Desastres listado em array disasters*/
+            queryObj['disasters'] = {'$all':disasters};
+        }
+
         const heros = await Hero.find(queryObj).populate('disasters');
-        return res.send( {heros} );
+        if(heros.length===0){
+            return res.send({heros:"hero not found"});
+        }else{
+            return res.send( {heros} );
+        }
     }catch(err){
         return res.status(500).send({error: 'Hero search error'});
     }
@@ -83,40 +86,29 @@ function errorHero(msg, param, location, error){
 router.post('/', validation.register, async(req,res)=>{
     try{
         const {realName, codename, cities, disasters} = req.body;
-        const hero = new Hero({realName, codename, cities});
 
-        /*muda o valor default*/
+        const disastersNamesFornecidos = disasters.map(item => item.name);
+        //Pega todos desastres no banco a partir do array disasters
+        //Fornecido. Por causa do $or pode vir menos desastre do banco
+        const disastersDatabase = await Disaster.find({"$or":disasters});
+        const disasterNamesInDB = disastersDatabase.map(item => item.name);
+        disastersNamesFornecidos.forEach(disaster =>{
+            //Verifica se o disaster em lowercase repassado esta no banco
+            if(disasterNamesInDB.indexOf(disaster.toLowerCase())===-1){
+                const msg = `disaster '${disaster}' is not registered`;
+                const param = "disaster";
+                const location = "body";
+                throw new errorHero(msg, param, location, 'errorRegister');
+            }
+        });
+        const hero = new Hero({realName, codename, cities, disasters:disastersDatabase});
+        /*muda o valor default teamWork*/
         if(req.body.hasOwnProperty('teamWork')){
             hero.set('teamWork', req.body.teamWork.toLowerCase());
         }
-       
-        /**Incluindo os desastres no esquema do heroi
-         * Percorre os desastres e se um desastre nao
-         * for encontrado no database entao o heroi nao eh cadastrado
-         * E levanta um erro como resposta*/
-
-
-        await Promise.all(disasters.map( async disaster => {
-            const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
-            if(disasterInDatabase===null){
-                /**O erro ValidationError gerado por hero.save() do mongoose
-                 * Ao tentar armazenar null em Disaster nao armazena 
-                 * O nome do desastre buscado (Disaster.find())
-                 * Foi necessario gerar um novo erro pra detalhar o erro como resposta*/
-                const msg = `disaster \'${disaster.name}\' is not registered`;
-                const param = "disaster";
-                const location = "body";
-                throw new errorHero(msg, param, location, 'errorDisaster');
-            }
-            //Cadastra no array os dados com o ID pra referenciar
-            hero.disasters.push(disasterInDatabase);
-        })).then(async function(){/*Salva o heroi no banco*/
-            await hero.save();
-            hero.realName = undefined;//Nao exibir nome apos cadastro
-            return res.send({hero});
-        }).catch(err => {
-            throw err;//Tratado pelo try catch de fora
-        });
+        await hero.save();
+        hero.realName = undefined;//Nao exibir nome apos cadastro
+        return res.send({hero});
     }catch(err){
         if(err.name === "ValidationError"){
             //Erro de validacoes do enum no modelo hero
@@ -137,8 +129,7 @@ router.post('/', validation.register, async(req,res)=>{
                 param: 'codename',
                 location: 'body'
             }});
-        }else if(err.name==="errorDisaster"){
-            //Disastre nao cadastrado
+        }else if(err.name==="errorRegister"){
             const {msg, param, location} = err;
             return res.status(400).send({error:{
                 msg:msg,
@@ -146,7 +137,7 @@ router.post('/', validation.register, async(req,res)=>{
                 location:location
             }});
         }else{
-            return res.status(500).send({error: 'Error, create new hero'});
+            return res.status(500).send({error: 'Error create new hero'});
         }
     }
 });
@@ -167,7 +158,7 @@ router.put('/update', validation.update, async(req, res)=>{
         const hero = await Hero.findOne({codename}).populate('disasters');
         if(hero === null){//Caso o heroi nao exista
             const valor = codename;
-            const msg = `codiname '${valor}' was not found`;
+            const msg = `codename '${valor}' was not found`;
             const param = "codename";
             const location = "body";
             throw new errorHero(msg, param, location, 'errorUpdate');
@@ -204,27 +195,29 @@ router.put('/update', validation.update, async(req, res)=>{
             heroInfoUpdate['cities'] = cities;
         }
         
-        var disasterInsert = [];
-        /*Percorre os desastres e verifica se estao cadastrados no banco
-          Depois armazenando ele em disasterInsert com id*/
         if(req.body.hasOwnProperty('disasters')){
-            await Promise.all(disasters.map( async disaster => {
-                const disasterInDatabase = await Disaster.findOne({name: disaster.name.toLowerCase()});
-                if(disasterInDatabase===null){//Caso nao exista, eh gerado um erro
-                    const msg = `disaster '${disaster.name}' is not registered`;
+            const disastersNamesFornecidos = disasters.map(item => item.name);
+            
+            //Pega todos desastres no banco a partir do array disasters
+            //Fornecido. Por causa do $or pode vir menos desastre do banco
+            const disastersDatabase = await Disaster.find({"$or":disasters});
+            const disasterNamesInDB = disastersDatabase.map(item => item.name);
+
+            disastersNamesFornecidos.forEach(disaster =>{
+                //Verifica se o disaster em lowercase repassado esta no banco
+                if(disasterNamesInDB.indexOf(disaster.toLowerCase())===-1){
+                    const msg = `disaster '${disaster}' is not registered`;
                     const param = "disaster";
                     const location = "body";
                     throw new errorHero(msg, param, location, 'errorUpdate');
                 }
-                disasterInsert.push(disasterInDatabase);
-            })).then(async function(){
-                heroInfoUpdate['disasters'] = disasterInsert;
             });
+            heroInfoUpdate['disasters'] = disastersDatabase;
         }
         const heroUpdateDatabase = await Hero.findByIdAndUpdate(
             hero._id, 
             heroInfoUpdate,
-            { new: true })
+            { new: true })//Retorna hero atualizado
         .populate('disasters');
         return res.send({hero:heroUpdateDatabase});
     }catch(err){
@@ -236,7 +229,7 @@ router.put('/update', validation.update, async(req, res)=>{
                 location:location
             }});
         }else{
-            return res.status(500).send({error:'Error create new project'});
+            return res.status(500).send({error:'Error update hero'});
         }
     }
 });

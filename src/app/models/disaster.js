@@ -1,16 +1,13 @@
 const mongoose = require('../../database');
 /**
- * Esquema dos disastres para incluir no banco
- * {
- *      "name":""   //Obg -> Testar, nao eh pra ter mais de um com o mesmo nome
- * }
+ * Modelo dos disastres no banco
  */
 const DisasterSchema = new mongoose.Schema({
 	name:{
 		type: String,
         required: true,
         unique: true,   //Impedir desastres com o mesmo nome no banco
-        lowercase: true,//vai ser convertido nesse formato
+        lowercase: true,
     }
 });
 

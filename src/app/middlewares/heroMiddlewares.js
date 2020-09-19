@@ -1,20 +1,43 @@
 const { body, validationResult } = require('express-validator');
 
 /**
- * Funcao que verifica se foi encontrado algum erro
- * Nas entradas, enviando uma resposta com detalhes do 
- * Primeiro erro encontrado
+ * Funcao que verifica se existe algum erro
+ * Nas entradas enviando uma resposta com detalhes do 
+ * Primeiro erro encontrado, caso contrario prossegue
  */
 validationParams = function(req, res, next){
     const errorValidation = validationResult(req);
     if (! errorValidation.isEmpty() ) {
-
         return res.status(400).send({
             //Emiti apenas o primeiro erro encontrado
             error: errorValidation.errors[0]
         });
     }
     next();
+}
+
+/**
+ * Se disasters for repassado como parametro
+ * Eh verificado se foi incluido na chave correta
+ * Que seria o "name" */
+validationDisastersKey = function(req, res, next){
+    if(!req.body.hasOwnProperty('disasters')){ next() }
+    else{
+        const keys = req.body.disasters.map(item=>Object.keys(item));
+        const error = [];
+        keys.forEach(key => {
+            if(key != 'name'){
+                const msg = `Disaster format is not accepted. Format correct {'name':'value_disaster'}`;
+                const param = `disasters`;
+                const location = "body";
+                error.push({msg:msg, param:param, location:location});
+            }
+        });
+        if(error.length != 0){
+            return res.status(400).send({error:error[0]});
+        }
+        next();    
+    }
 }
 
 /**
@@ -27,18 +50,18 @@ exports.recuperate =  [
         .optional()
         .not()
         .isEmpty().withMessage("Error, the field cannot be empty"),
-    validationParams,
     body('disasters')
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty')
         .isArray().withMessage('Error, needs to be array'),
-    validationParams,
     body('cities')
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty')
         .isArray().withMessage('Error, needs to be array'),
+    validationParams,
+    validationDisastersKey
 ];
 
 /**
@@ -50,26 +73,23 @@ exports.register = [
     body('realName')
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty'),
-    validationParams,
     body('codename')
         .not()
-        .isEmpty().withMessage('Error, the field cannot be empty'),   
-    validationParams,
+        .isEmpty().withMessage('Error, the field cannot be empty'),
     body('disasters')//array
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty')
         .isArray().withMessage('Error, needs to be array'),
-    validationParams,
     body('cities')//array
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty')
         .isArray().withMessage('Error, needs to be array'),
-    validationParams,
     body('teamWork')
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty'),
-    validationParams
+    validationParams,
+    validationDisastersKey
 ]
 
 /**
@@ -81,28 +101,25 @@ exports.update = [
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty'),
-    validationParams,
     body('codename')
         .not()
-        .isEmpty().withMessage('Error, the field cannot be empty'),   
-    validationParams,
+        .isEmpty().withMessage('Error, the field cannot be empty'),
     body('disasters')//array
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty')
         .isArray().withMessage('Error, needs to be array'),
-    validationParams,
     body('cities')//array
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty')
         .isArray().withMessage('Error, needs to be array'),
-    validationParams,
     body('teamWork')
         .optional()
         .not()
         .isEmpty().withMessage('Error, the field cannot be empty'),
-    validationParams
+    validationParams,
+    validationDisastersKey
 ]
 
 exports.delete = [

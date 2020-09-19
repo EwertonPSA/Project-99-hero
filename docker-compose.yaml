@@ -1,0 +1,17 @@
+version: "3.7"
+services: 
+    db: 
+        build: "./src/database"
+        container_name: mongodb-99hero
+        environment: 
+            MONGO_INITDB_ROOT_USERNAME: ${DEFINE_MONGODB_USERNAME_ROOT}
+            MONGO_INITDB_ROOT_PASSWORD: ${DEFINE_MONGODB_PASSWORD_ROOT}
+            MONGO_INITDB_DATABASE: ${DEFINE_MONGODB_DATABASE}
+        restart: always
+        volumes:
+            #Persistindo os dados do database
+            - ./src/database/db:/data/db:z
+            #Inicializa o banco com um usuario
+            - ./src/database/config/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
+        ports:
+            - "${DEFINE_PORT_MONGODB}:27017"
