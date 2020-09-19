@@ -9,8 +9,6 @@ services:
             MONGO_INITDB_DATABASE: ${DEFINE_MONGODB_DATABASE}
         restart: always
         volumes:
-            #Persistindo os dados do database
-            - ./src/database/db:/data/db:z
             #Inicializa o banco com um usuario
             - ./src/database/config/mongo-init.js:/docker-entrypoint-initdb.d/mongo-init.js
         ports:

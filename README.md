@@ -2,13 +2,11 @@
 ## Descrição do projeto
 Armazenar inforações dos herois, pra que a empresa possa fornecer o herói mais adequado para o tipo de desastre ou pela cobertura de cidade. O projeto atual envolve apenas alguns recursos do backend com requisições e acesso ao banco, gerando respostas. 
 
-Foi utilizado banco de dado MongoDB, docker-compose para levantar os containers e persistido os dados com alguns cadastros já realizado. Material de apoio: [link](https://www.youtube.com/watch?v=BN_8bCfVp88&list=PL85ITvJ7FLoiXVwHXeOsOuVppGbBzo2dp) .
+Foi utilizado banco de dado MongoDB, docker-compose para levantar os containers e alguns dados já são inicializados toda vez que o banco estiver vazio (ou seja, quando o container do mongo for inicializado). Material de apoio: [link](https://www.youtube.com/watch?v=BN_8bCfVp88&list=PL85ITvJ7FLoiXVwHXeOsOuVppGbBzo2dp) .
 
 
 
 ## Como rodar
-Acess a pasta /src/database e inclua permissão da pasta db para o seu usuario. Para os sistemas linux pode usar o comando chown em modo recursivo.
-
 Vá até a pasta /src e execute o comando
 ```
 npm install
