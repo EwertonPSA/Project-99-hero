@@ -10,23 +10,23 @@ Foi utilizado banco de dado MongoDB, docker-compose para levantar os containers 
 Acess a pasta /src/database e inclua permissão da pasta db para o seu usuario. Para os sistemas linux pode usar o comando chown em modo recursivo.
 
 Vá até a pasta /src e execute o comando
-´´´
+```
 npm install
-´´´
+```
 
 Vá até a pasta raiz e execute
-´´´
+```
 docker-compose up -d
-´´´
+```
 
 Tendo o node instalado na sua maquina, vá até a pasta raiz e execute 
-´´´
+```
 node src/index.js
-´´´
+```
 
 As requisições já podem ser enviadas e testadas. Usei a ferramenta insominia para testar as requisições.
 
 Pra parar o banco de dados do docker execute
-´´´
+```
 docker-compose down
-´´´ 
+``` 
