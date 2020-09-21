@@ -1,7 +1,3 @@
-/**
- * Reuni os recursos desenvolvidos pelos controlers
- * Administrando as rotas e disponibilizando os recursos na porta 3000 no node
- */
 const express = require('express');
 const dotenv = require('dotenv');
 dotenv.config();
